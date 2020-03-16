@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------------
 
-This project is to receive UDP ADIF log information whick from some logbook program (such WSTJ-X, JDTX) and send to buildin SPOT server with telnet service.
+This project is to receive UDP ADIF log information from some logbook programs or communicate programs (such WSTJ-X, JDTX) and send to buildin SPOT server with telnet service.
 
 License
 =======
