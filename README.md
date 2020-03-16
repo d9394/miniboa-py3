@@ -1,23 +1,6 @@
 -------------------------------------------------------------------------------------
 
-This project is outdated. For a more active fork see https://github.com/shmup/miniboa
-
--------------------------------------------------------------------------------------
-
-Miniboa-py3
-===========
-
-Miniboa-py3 is an asynchronous, single-threaded, poll-based Telnet server
-written in Python. It supports many users (512 on Windows, 1000 on Unix) and
-is fully cross-platform.
-
-This module is ideal for everything from MUD servers to services requiring an
-administration interface.
-
-Miniboa-py3 is a fork of [Jim Storch's miniboa](https://code.google.com/p/miniboa/)
-updated with full support for Python 3.
-
-For full documentation, see the miniboa project page.
+This project is to receive UDP ADIF log information whick from some logbook program (such WSTJ-X, JDTX) and send to buildin SPOT server with telnet service.
 
 License
 =======
