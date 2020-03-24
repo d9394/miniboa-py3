@@ -4,7 +4,9 @@ import logging
 import socket 
 import threading
 import datetime,time
+import re
 from miniboa import TelnetServer
+import WSJTXClass
 
 IDLE_TIMEOUT = 300
 CLIENT_LIST = []
@@ -89,12 +91,12 @@ def adif_spot(adif_text):
 	for item in p2.findall(adif_text) :
 		adif_data[item[0]]=item[2][:int(item[1])]
 	try:
-		Spot = adif_data['Call'].upper() + ":" + "		  "
-		Freq = "		 " + str(float(adif_data['Freq'])*1000) + " "
-		Call = adif_data['Call'].upper() + "		  "
-		Note = adif_data['NOTES'] + "							   "
-		Time = adif_data['TIME_ON'][:4] + "Z	 "
-		Mode = adif_data['Mode'].upper() + "	 "
+		Spot = adif_data['STATION_CALLSIGN'].upper() + ":" + "        "
+		Freq = "         " + str(float(adif_data['Freq'])*1000) + " "
+		Call = adif_data['Call'].upper() + "          "
+		Note = adif_data['NOTES'] + "                          "
+		Time = adif_data['TIME_ON'][:4] + "Z     "
+		Mode = adif_data['Mode'].upper() + "     "
 		result = 'DX de ' + Spot[:10] + Freq[:-9] + Call[:10] + Note[:31] + Time[:6] + Mode[:5]
 	except :
 		result = ""
@@ -102,18 +104,66 @@ def adif_spot(adif_text):
 	return result
 
 def receive_udp():
+	DecoderArray = {}
 	try:
 		mSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 		mSocket.bind(("",5555)) 
 	except Exception as e:
 		print("bind 5555 error %s" % e)
-	
+	logging.info("Listening for UDP ADIF log on port {}. CTRL-C to break.".format("5555"))
 	while True:
-		recvData, (remoteHost, remotePort) = mSocket.recvfrom(1024)
-		recvData=recvData.decode("utf-8").strip()
-		logging.info("{} send UDP '{}'".format(remoteHost, recvData))
-		if len(recvData)>0 :
-			broadcast(adif_spot(recvData))
+		fileContent, (remoteHost, remotePort) = mSocket.recvfrom(1024)
+		DecoderStation = ("{}:{}".format(remoteHost, remotePort))
+#		logging.info("{} send UDP '{}'".format(remoteHost, fileContent))
+		NewPacket = WSJTXClass.WSJTX_Packet(fileContent, 0)
+		NewPacket.Decode()
+
+		if NewPacket.PacketType == 0:
+			HeartbeatPacket = WSJTXClass.WSJTX_Heartbeat(fileContent, NewPacket.index)
+			HeartbeatPacket.Decode()
+			dataDecode = ("{} {} {}".format(HeartbeatPacket.MaximumSchema, HeartbeatPacket.Version ,HeartbeatPacket.Revision))
+			try:
+				logging.info("Heartbeat : {} @ {}".format(dataDecode, DecoderArray[DecoderStation]))
+			except :
+				logging.info("Heartbeat : {} @ ".format(dataDecode))
+
+		elif NewPacket.PacketType == 1:
+			StatusPacket = WSJTXClass.WSJTX_Status(fileContent, NewPacket.index)
+			StatusPacket.Decode()
+			dataDecode = ("{:08}-{}-{}".format(StatusPacket.Frequency, StatusPacket.Mode, StatusPacket.DECall))
+			#StatusPacket.Decoding
+			if DecoderStation not in DecoderArray :
+				DecoderArray.update({DecoderStation : ""} )
+			if StatusPacket.Decoding and DecoderArray[DecoderStation] != dataDecode:
+				DecoderArray[DecoderStation] = dataDecode
+			logging.info("Status : {} {} @ {}".format(dataDecode, StatusPacket.Decoding, DecoderArray[DecoderStation]))
+
+		elif NewPacket.PacketType == 2:
+			DecodePacket = WSJTXClass.WSJTX_Decode(fileContent, NewPacket.index)
+			DecodePacket.Decode()
+			# can use PyQt4.QtCore.QTime for this as well!
+			s = int(  (DecodePacket.Time/1000) % 60 )
+			m = int( ((DecodePacket.Time/(1000*60) ) %60 ) )
+			h = int( ((DecodePacket.Time/(1000*60*60)) %24))
+			dataDecode = ("{:02}:{:02}:{:02} {:>3} {:4.1f} {:>4} {} {}".format(h,m,s,DecodePacket.snr,DecodePacket.DeltaTime,DecodePacket.DeltaFrequency,DecodePacket.Mode,DecodePacket.Message))
+			try :
+				logging.info("Decode : {} @ {}".format(dataDecode, DecoderArray[DecoderStation]))
+			except :
+				logging.info("Decode : {} @".format(dataDecode))
+#			self.DecodeCount += 1
+			# now we need to send it to the UI
+			msg = dataDecode + ' ' + DecoderArray[DecoderStation]
+			broadcast(msg)
+
+		elif NewPacket.PacketType == 3:
+			logging.info("PacketType = 3")
+
+		elif NewPacket.PacketType == 5:
+			LoggedPacket = WSJTXClass.WSJTX_Logged(fileContent, NewPacket.index)
+			LoggedPacket.Decode()
+			logging.info("LoggedPacket : {}".format(LoggedPacket))
+		
+
 
 def spot_server():
 	# Create a telnet server with a port, address,
@@ -126,7 +176,7 @@ def spot_server():
 		on_disconnect=on_disconnect,
 		timeout = .05
 		)
-	logging.info("Listening for connections on port {}. CTRL-C to break.".format(telnet_server.port))
+	logging.info("Listening for SPOT connections on port {}. CTRL-C to break.".format(telnet_server.port))
 	while SERVER_RUN:
 		telnet_server.poll()
 		kick_idle() 
