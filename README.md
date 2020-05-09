@@ -1,6 +1,14 @@
 -------------------------------------------------------------------------------------
 
-This project is to receive UDP ADIF log information from some logbook programs or communicate programs (such WSTJ-X, JDTX) and send to buildin SPOT server with telnet service.
+This project is to receive UDP log information from some logbook programs (ADIF format decode was building) or communicate programs (such WSTJ-X, JDTX) and send to buildin SPOT server with telnet service.    
+     
+telnet port : 7300(TCP)     
+WSJT-X or JDTX incoming port 5555(UDP)     
+other UDP txt format log incoming port 5556(UDP)   
+
+spot filter function is support and done    
+some admin function is support and done    
+after telnet connection , use ? or help can get function and command description   
 
 License
 =======
