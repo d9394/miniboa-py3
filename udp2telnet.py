@@ -18,6 +18,7 @@ service = {
 IDLE_TIMEOUT = 3600
 CLIENT_LIST = []
 DecoderArray = {}
+ADMIN_PWD = "Aa1234567"        #do not use "'=, in password
 
 def pydecoder_udp(my_thread) :
 	"""
@@ -280,12 +281,18 @@ def chat(client):
 					send_msg += service[threads[i]] + "(" + threads[i] + ") is  : " + str(i.isAlive()) + '\n'
 				client.send(send_msg)
 			elif command[0] == 'SHUTDONW':			# shutdown == stop the server
-				SERVER_RUN.append("STOP")
+				if command[1] == ADMIN_PWD :
+					SERVER_RUN.append("STOP")
+				else :
+					client.send("Admin Password Error\n".format(SERVER_RUN))
 			elif command[0] == 'RESTART' :			# restart == restart thread
-				for i in command[1].split(",") :
-					if i in SERVER_RUN:
-						SERVER_RUN.remove(i)
-				client.send("wait 60s for {}\n".format(SERVER_RUN))
+				if command[1] == ADMIN_PWD :
+					for i in command[2].split(",") :
+						if i in SERVER_RUN:
+							SERVER_RUN.remove(i)
+					client.send("wait 60s for {}\n".format(SERVER_RUN))
+				else :
+					client.send("Admin Password Error\n".format(SERVER_RUN))
 			elif command[0] == 'CLIENTS' :			# clients == list all clients
 				i = 0
 				for guest in CLIENT_LIST :
@@ -293,14 +300,17 @@ def chat(client):
 					i += 1
 				client.send("Total clints : {}\n".format(i))
 			elif command[0] == 'KILL' :			# kill == kick out client
-				try:
-					for guest in CLIENT_LIST :
-						if guest.addrport() == command[1] :
-							guest.active = False
-							client.send("\n")
-							break
-				except :
-					logging.error("kickout command error %s" % msg)
+				if command[1] == ADMIN_PWD :
+					try:
+						for guest in CLIENT_LIST :
+							if guest.addrport() == command[2] :
+								guest.active = False
+								client.send("\n")
+								break
+					except :
+						logging.error("kickout command error %s" % msg)
+				else :
+					client.send("Admin Password Error\n".format(SERVER_RUN))
 			elif command[0] == 'STATIONS' :			# stations == list all report stations
 				for station in DecoderArray :
 					client.send("{} : {}\n".format(station, DecoderArray[station]))
