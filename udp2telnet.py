@@ -18,7 +18,7 @@ service = {
 IDLE_TIMEOUT = 3600
 CLIENT_LIST = []
 DecoderArray = {}
-ADMIN_PWD = "Aa1234567"        #do not use "'=, in password
+ADMIN_PWD = "Aa123456."        #do not use "'=, in password, !!!!Character case insensitivity!!!
 
 def pydecoder_udp(my_thread) :
 	"""
@@ -53,17 +53,17 @@ def decode_2(Content, Station):
 		if msg[:11] == "<parameters" :
 			msg = adif_spot(msg)
 		elif msg[:12] == "Start Decode" :
-			if DecoderArray[Station] != msg.replace("Start Decode ", "") :
-				DecoderArray[Station] = msg.replace("Start Decode ", "")
+			if DecoderArray[Station].split("@")[0] != msg.replace("Start Decode ", "") :
+				DecoderArray[Station] = msg.replace("Start Decode ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 				for station in list(DecoderArray.keys()) :
-					if DecoderArray[station] == msg.replace("Start Decode ", "") :
+					if DecoderArray[station].split("@")[0] == msg.replace("Start Decode ", "") :
 						if station != Station :
 							del DecoderArray[station]
 		elif msg[:16] == "Redpitaya Decode" :
-			if DecoderArray[Station] != msg.replace("Redpitaya Decode ", "") :
-				DecoderArray[Station] = msg.replace("Redpitaya Decode ", "")
+			if DecoderArray[Station].split("@")[0] != msg.replace("Redpitaya Decode ", "") :
+				DecoderArray[Station] = msg.replace("Redpitaya Decode ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 				for i in list(DecoderArray.keys()) :
-					if DecoderArray[i] == msg.replace("Redpitaya Decode ", "") :
+					if DecoderArray[i].split("@")[0] == msg.replace("Redpitaya Decode ", "") :
 						if i != Station :
 							del DecoderArray[i]
 		elif msg[:10] == "End Decode" :
@@ -138,10 +138,10 @@ def wsjtx_udp(my_thread):
 				if DecoderStation not in DecoderArray :
 					DecoderArray.update({DecoderStation : ""} )
 					logging.info("New Station %s" % DecoderStation)
-				if StatusPacket.Decoding and DecoderArray[DecoderStation] != dataDecode:
-					DecoderArray[DecoderStation] = dataDecode
+				if StatusPacket.Decoding and DecoderArray[DecoderStation].split("@")[0] != dataDecode:
+					DecoderArray[DecoderStation] = dataDecode + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 					for station in list(DecoderArray.keys()) :
-						if DecoderArray[station] == dataDecode :
+						if DecoderArray[station].split("@")[0] == dataDecode :
 							if station != DecoderStation :
 								del DecoderArray[station]
 				logging.debug("Status : {} {} @ {}".format(dataDecode, StatusPacket.Decoding, DecoderArray[DecoderStation]))
@@ -258,49 +258,51 @@ def chat(client):
 				send_msg += "stations : list all register report station\n"
 				send_msg += "clients : list all listen clients\n"
 				send_msg += "bye : disconnect\n"
-				client.send(send_msg)
+				client.send(colorize("^w" + send_msg))
 			elif command[0] in ['SA', 'FE', 'CA', "MO", "CQ"] :
 				if client.filter == "-" :
 					client.filter = msg.replace(" ", "")
 				else :
 					client.filter = client.filter + ", " + msg.replace(" ", "")
-				client.send(" your filter is : {}\n".format( client.filter ))
+				client.send(colorize("^w your filter is : {}\n".format( client.filter )))
 			elif command[0] == "NF" :
 				client.filter = ""
-				client.send("No filters\n")
+				client.send(colorize("^wNo filters\n"))
 			elif command[0] == "NC" :
 				client.color = not client.color
-				client.send("Set Colorful %s\n" % client.color)
+				client.send(colorize("^wSet Colorful %s\n" % client.color))
 			elif command[0] == "CK" :
-				client.send("{} filter is : {}\n".format( client.callsign,  client.filter ))
+				client.send(colorize("^w{} filter is : {}\n".format( client.callsign,  client.filter )))
 			elif command[0] == 'BYE':			# bye = disconnect
 				client.active = False
 			elif command[0] == "THREADS" : # check threading status
 				send_msg = "Telnet Server Thread List  :\n"
 				for i in threads :
 					send_msg += service[threads[i]] + "(" + threads[i] + ") is  : " + str(i.isAlive()) + '\n'
-				client.send(send_msg)
+				client.send(colorize("^w" + send_msg))
 			elif command[0] == 'SHUTDONW':			# shutdown == stop the server
-				if command[1] == ADMIN_PWD :
+				if command[1] == ADMIN_PWD.upper() :
 					SERVER_RUN.append("STOP")
 				else :
-					client.send("Admin Password Error\n".format(SERVER_RUN))
+					client.send(colorize("^wAdmin Password Error\n".format(SERVER_RUN)))
 			elif command[0] == 'RESTART' :			# restart == restart thread
-				if command[1] == ADMIN_PWD :
+				if command[1] == ADMIN_PWD.upper() :
 					for i in command[2].split(",") :
 						if i in SERVER_RUN:
 							SERVER_RUN.remove(i)
-					client.send("wait 60s for {}\n".format(SERVER_RUN))
+					client.send(colorize("^wwait 60s for {}\n".format(SERVER_RUN)))
 				else :
-					client.send("Admin Password Error\n".format(SERVER_RUN))
+					client.send(colorize("^wAdmin Password Error\n".format(SERVER_RUN)))
 			elif command[0] == 'CLIENTS' :			# clients == list all clients
 				i = 0
+				send_msg = ""
 				for guest in CLIENT_LIST :
-					client.send("{} from {} filter {} ({}s)\n".format(guest.callsign, guest.addrport(), guest.filter, int(guest.duration())))
+					send_msg += "{} from {} filter {} ({}s)\n".format(guest.callsign, guest.addrport(), guest.filter, int(guest.duration()))
 					i += 1
-				client.send("Total clints : {}\n".format(i))
+				send_msg += "Total clints : {}\n".format(i)
+				client.send(colorize("^w" + send_msg))
 			elif command[0] == 'KILL' :			# kill == kick out client
-				if command[1] == ADMIN_PWD :
+				if command[1] == ADMIN_PWD.upper() :
 					try:
 						for guest in CLIENT_LIST :
 							if guest.addrport() == command[2] :
@@ -310,21 +312,21 @@ def chat(client):
 					except :
 						logging.error("kickout command error %s" % msg)
 				else :
-					client.send("Admin Password Error\n".format(SERVER_RUN))
+					client.send(colorize("^wAdmin Password Error\n".format(SERVER_RUN)))
 			elif command[0] == 'STATIONS' :			# stations == list all report stations
 				for station in DecoderArray :
-					client.send("{} : {}\n".format(station, DecoderArray[station]))
+					client.send(colorize("^w{} : {}\n".format(station, DecoderArray[station])))
 			elif client.callsign == "" or client.callsign == "-" :
 				CallSign_reg = r'([A-Z]{1,2}|[0-9][A-Z])([0-9])([A-Z]{1,3})'
 				try:
 					if re.match(CallSign_reg, command[0] , re.I).span()[0] == 0 :
 						logging.info("{} logon the server".format(command[0]))
 						client.callsign = command[0]
-						client.send("Wellcome {} logon @ {}\n".format(command[0], client.addrport()))
+						client.send(colorize("^wWellcome {} logon @ {}\n".format(command[0], client.addrport())))
 				except :
-					client.send("Callsign Error. Please input again\n")
+					client.send(colorize("^wCallsign Error. Please input again\n"))
 			else :
-				client.send("unknow command, try 'help' for all command\n")
+				client.send(colorize("^wunknow command, try 'help' for all command\n"))
 	"""
 	for guest in CLIENT_LIST:
 		if guest != client:
