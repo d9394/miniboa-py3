@@ -10,6 +10,8 @@ spot filter function is support and done
 some admin function is support and done    
 after telnet connection , use ? or help can get function and command description   
 
+This program can be running on a openwrt router, and installed python3-base, python3-logging package.   
+
 License
 =======
 ```
