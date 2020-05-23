@@ -18,7 +18,7 @@ service = {
 IDLE_TIMEOUT = 3600
 CLIENT_LIST = []
 DecoderArray = {}
-ADMIN_PWD = "Aa123456."        #do not use "'=, in password, !!!!Character case insensitivity!!!
+ADMIN_PWD = "xxxx"        #do not use "'=, in password, !!!!Character case insensitivity!!!
 
 def pydecoder_udp(my_thread) :
 	"""
@@ -38,18 +38,18 @@ def pydecoder_udp(my_thread) :
 				if my_thread not in SERVER_RUN :
 					logging.info("Restart pydecoder_udp thread by %s" % SERVER_RUN)
 					return
-				fileContent, (remoteHost, remotePort) = mSocket.recvfrom(1024)
+				fileContent, (remoteHost, remotePort) = mSocket.recvfrom(10240)
 				DecoderStation = ("{}:{}:UDP".format(remoteHost, remotePort))
-				decode_2(fileContent, DecoderStation)
+				for i in fileContent.decode("utf-8").split("\n") :
+					decode_2(i, DecoderStation)
 		except Exception as e :
 			logging.info("UDP receive error (%s) %s" % (e, fileContent))
 
-def decode_2(Content, Station):
+def decode_2(msg, Station):
 	if Station not in DecoderArray :
 		DecoderArray.update({Station : ""} )
 		logging.info("New Station %s" % Station)
 	try:
-		msg = Content.decode('utf-8')
 		if msg[:11] == "<parameters" :
 			msg = adif_spot(msg)
 		elif msg[:12] == "Start Decode" :
@@ -69,10 +69,16 @@ def decode_2(Content, Station):
 		elif msg[:10] == "End Decode" :
 			return
 		else :
-			broadcast(msg[:51] + DecoderArray[Station] + '\n')
+			if DecoderArray[Station].split("@")[0][0:2] == "0-" :
+				rp_freq = msg[30:38]
+				msg = (msg.replace(rp_freq + " ", "") + "                          ")[0:51]
+				broadcast(msg + DecoderArray[Station].split("@")[0].replace("0-", rp_freq + "-") + '\n')
+			else :
+				broadcast(msg[:51] + DecoderArray[Station].split("@")[0] + '\n')
 	except :
 		logging.error("UDP packet error (%s) : %s" % (DecoderArray[Station],msg))
 	return
+	
 
 def adif_spot(adif_text):					#No used function at this time
 	adif_data = {}
@@ -163,9 +169,9 @@ def wsjtx_udp(my_thread):
 	#			self.DecodeCount += 1
 				# now we need to send it to the UI
 				try:
-					msg = dataDecode + DecoderArray[DecoderStation] + '\n'
+					msg = dataDecode + DecoderArray[DecoderStation].split("@")[0] + '\n'
 				except :
-					msg = dataDecode + '@ ' + DecoderStation + '\n'
+					msg = dataDecode + ' @ ' + DecoderStation + '\n'
 				broadcast(msg)
 
 			elif NewPacket.PacketType == 3:
@@ -231,7 +237,7 @@ def process_clients():
 				client.send("Please input your Callsign :\n")
 				client.callsign = "-"
 			elif client.filter == "" and client.callsign != "-" :
-				client.send("Please select frequency , example : fe=14074000\n")
+				client.send("Please select band(Mhz) to monitor , example : fe=14\n")
 				client.filter = "-"
 			if client.cmd_ready :
 				chat(client)
@@ -248,7 +254,7 @@ def chat(client):
 			command = msg.split("=")
 			if command[0] == "HELP" or command[0] == "?":
 				send_msg = "sa=ba7ib : filter only msg from station ba7ib\n"
-				send_msg += "fe=14074000 : filter only frequency is 14074000\n"
+				send_msg += "fe=14 : filter only band is 14MHz\n"
 				send_msg += "ca=y : filter only callsign begin with y\n"
 				send_msg += "mo=ft8 : filter only mode is ft8\n"
 				send_msg += "cq : only cq call will display\n"
@@ -354,52 +360,60 @@ def broadcast(msg):
 	Send msg to every client.
 	"""
 	colorful = ("^r", "^g", "^y", "^b", "^m", "^c", "^w")
+	detail_msg = msg.split()
+	msg_color=""
+	if detail_msg[5] == "CQ" :
+		msg_color = "^G"
+		grid = detail_msg[-2]
+		if len(grid) == 4 :
+			DIS = calu_dis(grid)
+			if DIS > 7 :
+				msg_color = "^R" 
+			elif DIS > 3 and DIS <= 7 :
+				msg_color = "^Y"
+	else :
+		char_sum = 0
+		for i in "-".join(detail_msg[-1].split("-")[2:]) :
+			char_sum += ord(i)
+		msg_color = colorful[int(char_sum % 7)]
 	for client in CLIENT_LIST:
 		if client.callsign != "" and client.callsign != "-" and client.filter != "" and client.filter != "-" :
-			detail_msg = msg.split()
-			msg_color=""
-			if client.color :
-				char_sum = 0
-				for i in "-".join(detail_msg[-1].split("-")[2:]) :
-					char_sum += ord(i)
-				msg_color = colorful[int(char_sum % 7)]
-				if detail_msg[5] == "CQ" :
-					msg_color = "^G"
-					grid = detail_msg[-2]
-					if len(grid) == 4 :
-						DIS = calu_dis(grid)
-						if DIS > 7 :
-							msg_color = "^R" 
-						elif DIS > 3 and DIS <= 7 :
-							msg_color = "^Y"
-#				else :
-#					msg_color += "^w"
+
+			sended = True
 			if len(client.filter) > 0 :
 				if client.filter.find("=*") == -1 :
 					for detail in client.filter.split(", ") :
 						filter = detail.split("=")
 						if filter[0] == "SA" :
 							if detail_msg[-1].split("-")[2] != filter[1] :
-								msg=""
+								sended = False
 						elif filter[0] == "FE" :
-							if detail_msg[-1].split("-")[0] != filter[1] :
-								msg=""
+							if detail_msg[-1].split("-")[0][0:2] != filter[1] :
+								sended = False
 						elif filter[0] == "CQ" :
 							if detail_msg[5] != "CQ" :
-								msg=""
+								sended = False
 						elif filter[0] == "CA" :
 							if " ".join(detail_msg[5:-1]).find(filter[1]) == -1 :
-								msg=""
+								sended = False
 						elif filter[0] == "MO" :
 							if detail_msg[-1].split("-")[1] != filter[1] :
-								msg=""
-						if msg == "" :
+								sended = False
+						if not sended :
 							break
-			if msg != "" :
-				if client.last_send != detail_msg[0] :
-					client.send("          .-.-.            .-.-.             .-.-.\n")
-					client.last_send = detail_msg[0]
-				client.send(colorize(msg_color + msg))
+			if sended :
+				if len(detail_msg[0]) == 6 :
+					if client.last_send != detail_msg[1] :
+						client.send("          .-.-.            .-.-.             .-.-.\n")
+						client.last_send = detail_msg[1]
+				else :
+					if client.last_send != detail_msg[0] :
+						client.send("          .-.-.            .-.-.             .-.-.\n")
+						client.last_send = detail_msg[0]
+				if client.color :
+					client.send(colorize(msg_color + msg))
+				else :
+					client.send(msg)
 
 if __name__ == '__main__':
 	# Simple chat server to demonstrate connection handling via the
