@@ -48,7 +48,7 @@ def pydecoder_udp(my_thread) :
 def decode_2(msg, Station):
 	if Station not in DecoderArray :
 		DecoderArray.update({Station : ""} )
-		logging.info("New Station %s" % Station)
+		logging.debug("New Station %s" % Station)
 	try:
 		if msg[:11] == "<parameters" :
 			msg = adif_spot(msg)
@@ -143,7 +143,7 @@ def wsjtx_udp(my_thread):
 				#StatusPacket.Decoding
 				if DecoderStation not in DecoderArray :
 					DecoderArray.update({DecoderStation : ""} )
-					logging.info("New Station %s" % DecoderStation)
+					logging.debug("New Station %s" % DecoderStation)
 				if StatusPacket.Decoding and DecoderArray[DecoderStation].split("@")[0] != dataDecode:
 					DecoderArray[DecoderStation] = dataDecode + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 					for station in list(DecoderArray.keys()) :
