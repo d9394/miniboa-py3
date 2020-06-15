@@ -18,7 +18,7 @@ service = {
 IDLE_TIMEOUT = 3600
 CLIENT_LIST = []
 DecoderArray = {}
-ADMIN_PWD = "xxxx"        #do not use "'=, in password, !!!!Character case insensitivity!!!
+ADMIN_PWD = "xxxxxx"        #do not use "'=, in password, !!!!Character case insensitivity!!!
 
 def pydecoder_udp(my_thread) :
 	"""
@@ -41,7 +41,8 @@ def pydecoder_udp(my_thread) :
 				fileContent, (remoteHost, remotePort) = mSocket.recvfrom(10240)
 				DecoderStation = ("{}:{}:UDP".format(remoteHost, remotePort))
 				for i in fileContent.decode("utf-8").split("\n") :
-					decode_2(i, DecoderStation)
+					if len(i) > 0:
+						decode_2(i, DecoderStation)
 		except Exception as e :
 			logging.info("UDP receive error (%s) %s" % (e, fileContent))
 
@@ -53,17 +54,19 @@ def decode_2(msg, Station):
 		if msg[:11] == "<parameters" :
 			msg = adif_spot(msg)
 		elif msg[:12] == "Start Decode" :
-			if DecoderArray[Station].split("@")[0] != msg.replace("Start Decode ", "") :
-				DecoderArray[Station] = msg.replace("Start Decode ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
+			msg = msg.upper()
+			if DecoderArray[Station].split("@")[0] != msg.replace("START DECODE ", "") :
+				DecoderArray[Station] = msg.replace("START DECODE ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 				for station in list(DecoderArray.keys()) :
-					if DecoderArray[station].split("@")[0] == msg.replace("Start Decode ", "") :
+					if DecoderArray[station].split("@")[0] == msg.replace("START DECODE ", "") :
 						if station != Station :
 							del DecoderArray[station]
 		elif msg[:16] == "Redpitaya Decode" :
-			if DecoderArray[Station].split("@")[0] != msg.replace("Redpitaya Decode ", "") :
-				DecoderArray[Station] = msg.replace("Redpitaya Decode ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
+			msg = msg.upper()
+			if DecoderArray[Station].split("@")[0] != msg.replace("REDPITAYA DECODE ", "") :
+				DecoderArray[Station] = msg.replace("REDPITAYA DECODE ", "") + "@" + datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 				for i in list(DecoderArray.keys()) :
-					if DecoderArray[i].split("@")[0] == msg.replace("Redpitaya Decode ", "") :
+					if DecoderArray[i].split("@")[0] == msg.replace("REDPITAYA DECODE ", "") :
 						if i != Station :
 							del DecoderArray[i]
 		elif msg[:10] == "End Decode" :
@@ -265,7 +268,7 @@ def chat(client):
 				send_msg += "clients : list all listen clients\n"
 				send_msg += "bye : disconnect\n"
 				client.send(colorize("^w" + send_msg))
-			elif command[0] in ['SA', 'FE', 'CA', "MO", "CQ"] :
+			elif command[0] in ['SA', 'FE', 'CA', "MO", "CQ", "DI"] :
 				if client.filter == "-" :
 					client.filter = msg.replace(" ", "")
 				else :
@@ -320,8 +323,10 @@ def chat(client):
 				else :
 					client.send(colorize("^wAdmin Password Error\n".format(SERVER_RUN)))
 			elif command[0] == 'STATIONS' :			# stations == list all report stations
-				for station in DecoderArray :
+				for station in list(DecoderArray.keys()) :
 					client.send(colorize("^w{} : {}\n".format(station, DecoderArray[station])))
+					if DecoderArray[station].strip() == "" :
+						del DecoderArray[station]
 			elif client.callsign == "" or client.callsign == "-" :
 				CallSign_reg = r'([A-Z]{1,2}|[0-9][A-Z])([0-9])([A-Z]{1,3})'
 				try:
@@ -362,15 +367,16 @@ def broadcast(msg):
 	colorful = ("^r", "^g", "^y", "^b", "^m", "^c", "^w")
 	detail_msg = msg.split()
 	msg_color=""
+	grid = detail_msg[-2]
+	DIS = 0
+	if re.match(r'^[a-z]{2}[0-9]{2}$', grid , re.I) and grid != "RR73" :
+		DIS = calu_dis(grid)
 	if detail_msg[5] == "CQ" :
 		msg_color = "^G"
-		grid = detail_msg[-2]
-		if len(grid) == 4 :
-			DIS = calu_dis(grid)
-			if DIS > 7 :
-				msg_color = "^R" 
-			elif DIS > 3 and DIS <= 7 :
-				msg_color = "^Y"
+		if DIS > 7 :
+			msg_color = "^R" 
+		elif DIS > 3 and DIS <= 7 :
+			msg_color = "^Y"
 	else :
 		char_sum = 0
 		for i in "-".join(detail_msg[-1].split("-")[2:]) :
@@ -378,17 +384,16 @@ def broadcast(msg):
 		msg_color = colorful[int(char_sum % 7)]
 	for client in CLIENT_LIST:
 		if client.callsign != "" and client.callsign != "-" and client.filter != "" and client.filter != "-" :
-
 			sended = True
 			if len(client.filter) > 0 :
 				if client.filter.find("=*") == -1 :
 					for detail in client.filter.split(", ") :
 						filter = detail.split("=")
 						if filter[0] == "SA" :
-							if detail_msg[-1].split("-")[2] != filter[1] :
+							if "-".join(detail_msg[-1].split("-")[2:]) != filter[1] :
 								sended = False
 						elif filter[0] == "FE" :
-							if detail_msg[-1].split("-")[0][0:2] != filter[1] :
+							if detail_msg[-1].split("-")[0][0:2] != ("0" + filter[1])[-2:] :
 								sended = False
 						elif filter[0] == "CQ" :
 							if detail_msg[5] != "CQ" :
@@ -398,6 +403,9 @@ def broadcast(msg):
 								sended = False
 						elif filter[0] == "MO" :
 							if detail_msg[-1].split("-")[1] != filter[1] :
+								sended = False
+						elif filter[0] == "DI" :
+							if DIS < int(filter[1]) :
 								sended = False
 						if not sended :
 							break
